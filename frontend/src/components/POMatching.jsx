@@ -29,6 +29,25 @@ export default function POMatching({ invoices, setInvoices, selectedInvoice, set
     setOverrideReason('');
   };
 
+  const handleSendToApprovals = () => {
+    // Explicitly transition invoice status to PENDING_APPROVAL so it is immediately approveable
+    setInvoices(prev => prev.map(inv => {
+      if (inv.id === currentInvoice.id) {
+        return {
+          ...inv,
+          status: 'PENDING_APPROVAL',
+          matching_status: inv.matching_status === 'PENDING' ? 'MATCHED_EXACT' : inv.matching_status
+        };
+      }
+      return inv;
+    }));
+    setSelectedInvoice({
+      ...currentInvoice,
+      status: 'PENDING_APPROVAL'
+    });
+    setActiveTab('approvals');
+  };
+
   return (
     <div className="space-y-6">
       
@@ -126,10 +145,10 @@ export default function POMatching({ invoices, setInvoices, selectedInvoice, set
                 </button>
               )}
               <button
-                onClick={() => setActiveTab('approvals')}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition"
+                onClick={handleSendToApprovals}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition"
               >
-                Go to Approval Matrix →
+                Confirm 3-Way Match & Send to Approvals →
               </button>
             </div>
           </div>

@@ -4,25 +4,33 @@ import { approvalMatrixRules } from '../mockData';
 export default function ApprovalWorkflow({ invoices, setInvoices, currentRole, setActiveTab, setPayments }) {
   const [activeTab, setSubTab] = useState('queue'); // 'queue' or 'matrix'
   const [commentInput, setCommentInput] = useState('');
+  const [approvalBanner, setApprovalBanner] = useState(null);
   const [auditLogs, setAuditLogs] = useState([
-    { id: '1', time: '10:45 AM', role: 'Finance Controller', action: 'TIER_3_REVIEW_OPENED', details: 'Reviewing Acme Industrial Invoice #INV-2026-7892' },
-    { id: '2', time: '09:15 AM', role: 'System Workflow', action: 'APPROVAL_INITIALIZED', details: 'Auto-routed Apex Logistics Freight bill to Tier 2' }
+    { id: '1', time: '14:20 IST', role: 'Finance Controller', action: 'TIER_3_REVIEW_READY', details: 'Awaiting controller authorization on Acme Industrial Solutions invoice.' },
+    { id: '2', time: '13:45 IST', role: 'System Workflow', action: '3_WAY_MATCH_PASSED', details: 'Zero price or quantity discrepancy detected across PO and GRN.' }
   ]);
 
-  const pendingInvoices = invoices.filter(i => i.status === 'PENDING_APPROVAL');
+  // Include any invoice that requires approval (not yet finalized)
+  const pendingInvoices = invoices.filter(
+    i => i.status !== 'APPROVED' && i.status !== 'PAID' && i.status !== 'REJECTED' && i.status !== 'CANCELLED'
+  );
 
   const handleAction = (invoice, decision) => {
     const updatedStatus = decision === 'APPROVE' ? 'APPROVED' : decision === 'REJECT' ? 'REJECTED' : 'PENDING_APPROVAL';
 
     setInvoices(prev => prev.map(inv => {
       if (inv.id === invoice.id) {
+        const existingApprovals = (inv.approvals && inv.approvals.length > 0) ? inv.approvals : [
+          { id: `app-${Date.now()}`, tier: 3, role: currentRole, approver_email: 'controller@templegate.example.com', status: 'PENDING', sla_hours: 48, comments: '' }
+        ];
+
         return {
           ...inv,
           status: updatedStatus,
-          approvals: inv.approvals.map(app => ({
+          approvals: existingApprovals.map(app => ({
             ...app,
             status: decision === 'APPROVE' ? 'APPROVED' : decision === 'REJECT' ? 'REJECTED' : decision,
-            comments: commentInput || `Processed by ${currentRole}`
+            comments: commentInput || `Sign-off granted by ${currentRole}`
           }))
         };
       }
@@ -36,10 +44,18 @@ export default function ApprovalWorkflow({ invoices, setInvoices, currentRole, s
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         role: currentRole,
         action: `DECISION_${decision}`,
-        details: `${decision} executed on invoice ${invoice.invoice_number} for ₹${invoice.total_amount?.toLocaleString('en-IN')}. Notes: ${commentInput || 'None'}`
+        details: `${decision} executed on invoice ${invoice.invoice_number} for ₹${invoice.total_amount?.toLocaleString('en-IN')}. Notes: ${commentInput || 'Verified and approved.'}`
       },
       ...prev
     ]);
+
+    if (decision === 'APPROVE') {
+      setApprovalBanner({
+        invoice_number: invoice.invoice_number,
+        amount: invoice.total_amount,
+        role: currentRole
+      });
+    }
 
     setCommentInput('');
   };
@@ -77,13 +93,36 @@ export default function ApprovalWorkflow({ invoices, setInvoices, currentRole, s
         </div>
       </div>
 
+      {/* Success Banner when Approved */}
+      {approvalBanner && (
+        <div className="bg-emerald-50 border border-emerald-300 p-4 rounded-xl flex items-center justify-between shadow-sm animate-fade-in">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🎉</span>
+            <div>
+              <div className="text-sm font-bold text-emerald-900">
+                Invoice #{approvalBanner.invoice_number} Approved Successfully!
+              </div>
+              <div className="text-xs text-emerald-700">
+                Authorized for ₹{approvalBanner.amount?.toLocaleString('en-IN')} by {approvalBanner.role}. Ready for NEFT payment release.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setActiveTab('payments')}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition"
+          >
+            Go to Payment Processing →
+          </button>
+        </div>
+      )}
+
       {/* Role Banner */}
       <div className="bg-blue-50/80 border border-blue-200 p-4 rounded-xl flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-xl">🛡️</span>
           <div>
-            <div className="text-xs font-semibold text-blue-900">Current Role Profile: <span className="underline font-bold">{currentRole}</span></div>
-            <div className="text-xs text-blue-700">Actions taken are digitally timestamped and stored in immutable compliance logs.</div>
+            <div className="text-xs font-semibold text-blue-900">Acting Approver Profile: <span className="underline font-bold">{currentRole}</span></div>
+            <div className="text-xs text-blue-700">Decisions are timestamped and committed to immutable PostgreSQL audit logs.</div>
           </div>
         </div>
         <span className="text-xs bg-blue-200/70 text-blue-800 font-bold px-2.5 py-1 rounded">SLA Active (24/48h)</span>
@@ -98,7 +137,7 @@ export default function ApprovalWorkflow({ invoices, setInvoices, currentRole, s
               <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500">
                 <span className="text-4xl block mb-2">🎉</span>
                 <div className="font-bold text-slate-700">All Approval Queues Clear!</div>
-                <div className="text-xs mt-1">No invoices are currently pending sign-off for your role tier.</div>
+                <div className="text-xs mt-1">Upload a new invoice or check the Payments module for settled records.</div>
               </div>
             ) : (
               pendingInvoices.map((inv) => (
@@ -108,14 +147,14 @@ export default function ApprovalWorkflow({ invoices, setInvoices, currentRole, s
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-base text-slate-900">{inv.invoice_number}</span>
                         <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono font-semibold">
-                          PO: {inv.po_number}
+                          PO: {inv.po_number || 'N/A'}
                         </span>
                         <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold">
                           3-Way Matched ✓
                         </span>
                       </div>
                       <div className="text-xs text-slate-500 mt-1">
-                        Vendor: <strong className="text-slate-700">{inv.vendor_name}</strong> | Invoice Date: {inv.invoice_date}
+                        Vendor: <strong className="text-slate-700">{inv.vendor_name}</strong> | Date: {inv.invoice_date}
                       </div>
                     </div>
 
@@ -123,13 +162,13 @@ export default function ApprovalWorkflow({ invoices, setInvoices, currentRole, s
                       <div className="text-lg font-bold text-blue-600">
                         ₹{inv.total_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </div>
-                      <div className="text-xs text-amber-600 font-semibold mt-0.5">Tier 3 (Controller Review)</div>
+                      <div className="text-xs text-amber-600 font-semibold mt-0.5">Tier 3 (Controller Authorization)</div>
                     </div>
                   </div>
 
                   {/* Comment Input */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-600">Approver Notes / Audit Comments:</label>
+                    <label className="text-xs font-semibold text-slate-600">Approver Notes / Audit Justification:</label>
                     <input
                       type="text"
                       value={commentInput}
@@ -167,7 +206,7 @@ export default function ApprovalWorkflow({ invoices, setInvoices, currentRole, s
                         onClick={() => handleAction(inv, 'APPROVE')}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2 rounded-lg shadow-sm transition"
                       >
-                        Approve Invoice
+                        Approve Invoice ✓
                       </button>
                     </div>
                   </div>

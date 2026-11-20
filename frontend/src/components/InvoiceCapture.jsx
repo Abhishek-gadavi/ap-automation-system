@@ -5,7 +5,6 @@ export default function InvoiceCapture({ invoices, setInvoices, setActiveTab, se
   const [selectedFile, setSelectedFile] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeExtractedInvoice, setActiveExtractedInvoice] = useState(invoices[0] || null);
-  const [emailSubject, setEmailSubject] = useState('Tax Invoice #INV-2026-9921 from Acme Corp');
 
   // Handle Drag & Drop
   const handleDrag = (e) => {
@@ -60,14 +59,14 @@ export default function InvoiceCapture({ invoices, setInvoices, setActiveTab, se
         page_count: ext === 'PDF' ? 2 : 1,
         matching_type: 'THREE_WAY',
         matching_status: 'MATCHED_EXACT',
-        status: 'PENDING_MATCHING',
+        status: 'PENDING_APPROVAL', // Immediately eligible for multi-tier approval
         validation_errors: [],
         line_items: [
           { id: `l-${Date.now()}-1`, line_number: 1, item_code: 'ITM-SRV-01', description: 'High-Precision CNC Machined Cylinders', quantity: 50, unit_price: 2000.0, tax_rate: 18, total_price: 118000.0, confidence_score: 99.1 },
           { id: `l-${Date.now()}-2`, line_number: 2, item_code: 'ITM-SRV-02', description: 'High-Tensile Industrial Fasteners (Box of 500)', quantity: 25, unit_price: 2000.0, tax_rate: 18, total_price: 59000.0, confidence_score: 98.0 }
         ],
         approvals: [
-          { id: `app-${Date.now()}`, tier: 3, role: 'Finance Controller', approver_email: 'controller@templegate.example.com', status: 'PENDING', sla_hours: 48, comments: 'Awaiting Controller Review' }
+          { id: `app-${Date.now()}`, tier: 3, role: 'Finance Controller', approver_email: 'controller@templegate.example.com', status: 'PENDING', sla_hours: 48, comments: 'Awaiting Controller Authorization' }
         ]
       };
 
@@ -75,7 +74,7 @@ export default function InvoiceCapture({ invoices, setInvoices, setActiveTab, se
       setActiveExtractedInvoice(newInvoice);
       setSelectedInvoice(newInvoice);
       setIsProcessing(false);
-    }, 1200);
+    }, 1000);
   };
 
   const handleSimulatedEmailIngest = () => {
@@ -87,10 +86,9 @@ export default function InvoiceCapture({ invoices, setInvoices, setActiveTab, se
     setIsProcessing(true);
     setTimeout(() => {
       const f1 = new File(["b1"], "Acme_Batch_Nov_01.pdf", { type: "application/pdf" });
-      const f2 = new File(["b2"], "Apex_Logistics_Nov_02.png", { type: "image/png" });
       processUploadedFile(f1);
       setIsProcessing(false);
-    }, 1000);
+    }, 800);
   };
 
   return (
@@ -198,21 +196,35 @@ export default function InvoiceCapture({ invoices, setInvoices, setActiveTab, se
                 <span className="text-xs font-semibold bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
                   Format: {activeExtractedInvoice.file_format} ({activeExtractedInvoice.page_count} Pages)
                 </span>
+                <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded">
+                  Status: PENDING APPROVAL
+                </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
                 Source Document: <span className="font-mono text-slate-700">{activeExtractedInvoice.file_name}</span>
               </p>
             </div>
 
-            <button
-              onClick={() => {
-                setSelectedInvoice(activeExtractedInvoice);
-                setActiveTab('matching');
-              }}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition"
-            >
-              Proceed to PO Matching →
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setSelectedInvoice(activeExtractedInvoice);
+                  setActiveTab('matching');
+                }}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold px-3 py-2 rounded-lg transition"
+              >
+                Inspect PO Match ⚖️
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedInvoice(activeExtractedInvoice);
+                  setActiveTab('approvals');
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition"
+              >
+                Go to Approvals (Sign Off) →
+              </button>
+            </div>
           </div>
 
           {/* Validation Engine Summary */}
