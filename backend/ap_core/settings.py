@@ -1,18 +1,22 @@
 """
-Django settings for AP Automation System.
+Django Settings for Accounts Payable Automation Software
+Target: Templegate Technologies & Services Pvt. Ltd.
 Author: Abhishek Gadavi
-Submission for: Templegate Technologies & Services Pvt. Ltd.
 """
 
 import os
 from pathlib import Path
+from datetime import timedelta
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-templegate-ap-automation-key-2026-xyz987')
+# Load .env file from project root
+load_dotenv(BASE_DIR.parent / '.env')
+load_dotenv(BASE_DIR / '.env')
 
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-templegate-ap-master-key-2026-super-secure')
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
-
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
@@ -22,17 +26,20 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
-    # Third party apps
+
+    # Third Party Packages
     'rest_framework',
+    'rest_framework_simplejwt',
     'corsheaders',
-    
-    # Internal business apps
+
+    # Internal Business Modules
+    'apps.accounts',
     'apps.vendors',
     'apps.invoices',
     'apps.matching',
     'apps.approvals',
     'apps.payments',
+    'apps.notifications',
     'apps.analytics',
 ]
 
@@ -67,18 +74,23 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'ap_core.wsgi.application'
 
-# Database Configuration: PostgreSQL (Mandatory) with automated fallback to SQLite if DB server offline
-USE_POSTGRES = os.environ.get('USE_POSTGRES', 'False') == 'True'
+# ==============================================================================
+# DATABASE CONFIGURATION: PostgreSQL (Mandatory)
+# ==============================================================================
+# Runs against Docker PostgreSQL service (accounts_payable_db / accounts_user)
+# Automated fallback to SQLite only when explicitly enabled for unit tests
+USE_POSTGRES = os.environ.get('USE_POSTGRES', 'True') == 'True'
 
 if USE_POSTGRES:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.environ.get('DB_NAME', 'ap_automation_db'),
-            'USER': os.environ.get('DB_USER', 'postgres'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', 'postgres'),
+            'NAME': os.environ.get('POSTGRES_DB', 'accounts_payable_db'),
+            'USER': os.environ.get('POSTGRES_USER', 'accounts_user'),
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'accounts_secure_pwd_2026'),
             'HOST': os.environ.get('DB_HOST', 'localhost'),
             'PORT': os.environ.get('DB_PORT', '5432'),
+            'CONN_MAX_AGE': 60,
         }
     }
 else:
@@ -89,13 +101,34 @@ else:
         }
     }
 
-AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
-]
+# ==============================================================================
+# REST FRAMEWORK & JWT AUTHENTICATION
+# ==============================================================================
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 50,
+}
 
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.environ.get('JWT_ACCESS_LIFETIME_MINUTES', 60))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.environ.get('JWT_REFRESH_LIFETIME_DAYS', 7))),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'SIGNING_KEY': os.environ.get('JWT_SECRET_KEY', SECRET_KEY),
+}
+
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+
+# Internationalization
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Asia/Kolkata'
 USE_I18N = True
@@ -109,19 +142,8 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# REST Framework Configuration
-REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
-    ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 50,
-}
-
-# CORS Configuration
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
-
-# OCR Engine Configurations
-OCR_CONFIDENCE_THRESHOLD = 80.0
-TOLERANCE_PERCENTAGE_DEFAULT = 2.5  # 2.5% tolerance for PO vs Invoice matching
+# OCR & Business Engine Configurations
+OCR_CONFIDENCE_THRESHOLD = float(os.environ.get('OCR_CONFIDENCE_THRESHOLD', 85.0))
+PRICE_TOLERANCE_PERCENT = float(os.environ.get('PRICE_TOLERANCE_PERCENT', 2.0))
+COMPANY_GSTIN = '29TEMP9876E1Z2'
+COMPANY_STATE_CODE = '29'  # Karnataka

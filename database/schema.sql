@@ -1,8 +1,10 @@
 -- ============================================================================
--- Accounts Payable (AP) Automation Software - Database Schema
--- Target RDBMS: PostgreSQL 14+
--- Author: Abhishek Gadavi
+-- Enterprise Accounts Payable (AP) Automation Software with OCR
+-- Target RDBMS: PostgreSQL 14+ (Compulsory Stack)
+-- Database Name: accounts_payable_db
+-- User: accounts_user
 -- Submission for: Templegate Technologies & Services Pvt. Ltd.
+-- Author: Abhishek Gadavi
 -- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -10,65 +12,72 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ----------------------------------------------------------------------------
 -- 1. ENUMS & DOMAINS
 -- ----------------------------------------------------------------------------
-CREATE TYPE invoice_status_enum AS ENUM (
-    'DRAFT',
-    'UPLOADED',
-    'PROCESSING_OCR',
-    'EXTRACTED',
-    'VALIDATION_FAILED',
-    'PENDING_MATCHING',
-    'MATCHING_FAILED',
-    'PENDING_APPROVAL',
-    'APPROVED',
-    'REJECTED',
-    'PAYMENT_SCHEDULED',
-    'PAID',
-    'CANCELLED'
-);
+DO $$ BEGIN
+    CREATE TYPE invoice_status_enum AS ENUM (
+        'DRAFT', 'UPLOADED', 'PROCESSING_OCR', 'EXTRACTED', 'VALIDATION_FAILED',
+        'PENDING_MATCHING', 'MATCHING_FAILED', 'PENDING_APPROVAL', 'APPROVED',
+        'REJECTED', 'PAYMENT_SCHEDULED', 'PAID', 'CANCELLED'
+    );
+EXCEPTION WHEN duplicate_object THEN null; END $$;
 
-CREATE TYPE matching_type_enum AS ENUM (
-    'TWO_WAY',
-    'THREE_WAY'
-);
+DO $$ BEGIN
+    CREATE TYPE matching_type_enum AS ENUM ('TWO_WAY', 'THREE_WAY');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
 
-CREATE TYPE match_status_enum AS ENUM (
-    'PENDING',
-    'MATCHED_EXACT',
-    'MATCHED_WITHIN_TOLERANCE',
-    'DISCREPANCY_PRICE',
-    'DISCREPANCY_QTY',
-    'DISCREPANCY_TOTAL',
-    'MANUALLY_OVERRIDDEN'
-);
+DO $$ BEGIN
+    CREATE TYPE match_status_enum AS ENUM (
+        'PENDING', 'MATCHED_EXACT', 'MATCHED_WITHIN_TOLERANCE',
+        'DISCREPANCY_PRICE', 'DISCREPANCY_QTY', 'DISCREPANCY_TOTAL', 'MANUALLY_OVERRIDDEN'
+    );
+EXCEPTION WHEN duplicate_object THEN null; END $$;
 
-CREATE TYPE approval_status_enum AS ENUM (
-    'PENDING',
-    'APPROVED',
-    'REJECTED',
-    'ESCALATED',
-    'CLARIFICATION_REQUESTED'
-);
+DO $$ BEGIN
+    CREATE TYPE approval_status_enum AS ENUM (
+        'PENDING', 'APPROVED', 'REJECTED', 'ESCALATED', 'CLARIFICATION_REQUESTED'
+    );
+EXCEPTION WHEN duplicate_object THEN null; END $$;
 
-CREATE TYPE payment_status_enum AS ENUM (
-    'PENDING',
-    'PROCESSING',
-    'PAID',
-    'FAILED',
-    'CANCELLED'
-);
+DO $$ BEGIN
+    CREATE TYPE payment_status_enum AS ENUM (
+        'PENDING', 'PROCESSING', 'PAID', 'FAILED', 'CANCELLED'
+    );
+EXCEPTION WHEN duplicate_object THEN null; END $$;
 
-CREATE TYPE vendor_status_enum AS ENUM (
-    'PENDING_ONBOARDING',
-    'UNDER_REVIEW',
-    'ACTIVE',
-    'SUSPENDED',
-    'REJECTED'
+DO $$ BEGIN
+    CREATE TYPE vendor_status_enum AS ENUM (
+        'PENDING_ONBOARDING', 'UNDER_REVIEW', 'ACTIVE', 'SUSPENDED', 'REJECTED'
+    );
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+    CREATE TYPE user_role_enum AS ENUM (
+        'ADMIN', 'FINANCE_EMPLOYEE', 'APPROVER_MANAGER', 'VENDOR'
+    );
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+-- ----------------------------------------------------------------------------
+-- 2. USERS & ROLES
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_profiles (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    username VARCHAR(150) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    first_name VARCHAR(150),
+    last_name VARCHAR(150),
+    role user_role_enum DEFAULT 'FINANCE_EMPLOYEE',
+    department VARCHAR(100) DEFAULT 'Accounts Payable',
+    approval_limit NUMERIC(15, 2) DEFAULT 50000.00,
+    vendor_id UUID,
+    is_active_employee BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ----------------------------------------------------------------------------
--- 2. VENDORS & BANKING
+-- 3. VENDORS & BANK DETAILS
 -- ----------------------------------------------------------------------------
-CREATE TABLE vendors (
+CREATE TABLE IF NOT EXISTS vendors (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     vendor_code VARCHAR(32) UNIQUE NOT NULL,
     name VARCHAR(255) NOT NULL,
@@ -89,7 +98,7 @@ CREATE TABLE vendors (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE vendor_bank_details (
+CREATE TABLE IF NOT EXISTS vendor_bank_details (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     vendor_id UUID NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
     bank_name VARCHAR(150) NOT NULL,
@@ -103,9 +112,9 @@ CREATE TABLE vendor_bank_details (
 );
 
 -- ----------------------------------------------------------------------------
--- 3. PURCHASE ORDERS & GOODS RECEIPT NOTES (GRN)
+-- 4. PURCHASE ORDERS & LINE ITEMS
 -- ----------------------------------------------------------------------------
-CREATE TABLE purchase_orders (
+CREATE TABLE IF NOT EXISTS purchase_orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     po_number VARCHAR(64) UNIQUE NOT NULL,
     vendor_id UUID NOT NULL REFERENCES vendors(id),
@@ -119,7 +128,7 @@ CREATE TABLE purchase_orders (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE po_line_items (
+CREATE TABLE IF NOT EXISTS po_line_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     po_id UUID NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
     item_code VARCHAR(64) NOT NULL,
@@ -132,7 +141,10 @@ CREATE TABLE po_line_items (
     total_price NUMERIC(15, 2) NOT NULL
 );
 
-CREATE TABLE goods_receipt_notes (
+-- ----------------------------------------------------------------------------
+-- 5. GOODS RECEIPT NOTES (GRN) & RECEIVED ITEMS
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS goods_receipt_notes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     grn_number VARCHAR(64) UNIQUE NOT NULL,
     po_id UUID NOT NULL REFERENCES purchase_orders(id),
@@ -144,7 +156,7 @@ CREATE TABLE goods_receipt_notes (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE grn_line_items (
+CREATE TABLE IF NOT EXISTS grn_line_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     grn_id UUID NOT NULL REFERENCES goods_receipt_notes(id) ON DELETE CASCADE,
     po_line_item_id UUID REFERENCES po_line_items(id),
@@ -156,9 +168,9 @@ CREATE TABLE grn_line_items (
 );
 
 -- ----------------------------------------------------------------------------
--- 4. INVOICES & OCR EXTRACTION
+-- 6. INVOICES, OCR EXTRACTION & DOCUMENTS
 -- ----------------------------------------------------------------------------
-CREATE TABLE invoices (
+CREATE TABLE IF NOT EXISTS invoices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     invoice_number VARCHAR(100),
     vendor_id UUID REFERENCES vendors(id),
@@ -189,7 +201,7 @@ CREATE TABLE invoices (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE invoice_line_items (
+CREATE TABLE IF NOT EXISTS invoice_line_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     line_number INTEGER NOT NULL,
@@ -204,10 +216,29 @@ CREATE TABLE invoice_line_items (
     confidence_score NUMERIC(5, 2) DEFAULT 95.00
 );
 
+CREATE TABLE IF NOT EXISTS invoice_documents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    document_type VARCHAR(50) DEFAULT 'ORIGINAL_INVOICE',
+    storage_path VARCHAR(500) NOT NULL,
+    mime_type VARCHAR(100),
+    file_hash_sha256 VARCHAR(64),
+    uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS invoice_validation_results (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    check_name VARCHAR(100) NOT NULL,
+    check_status VARCHAR(20) NOT NULL, -- VALID, WARNING, FAILED
+    error_message TEXT,
+    evaluated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ----------------------------------------------------------------------------
--- 5. MATCHING RESULTS & DISCREPANCY LOGS
+-- 7. MATCHING RESULTS & DISCREPANCIES
 -- ----------------------------------------------------------------------------
-CREATE TABLE matching_results (
+CREATE TABLE IF NOT EXISTS matching_results (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     po_id UUID REFERENCES purchase_orders(id),
@@ -224,9 +255,9 @@ CREATE TABLE matching_results (
 );
 
 -- ----------------------------------------------------------------------------
--- 6. APPROVAL MATRIX & WORKFLOWS
+-- 8. APPROVAL MATRIX & WORKFLOW ENGINE
 -- ----------------------------------------------------------------------------
-CREATE TABLE approval_matrix (
+CREATE TABLE IF NOT EXISTS approval_matrix (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tier_level INTEGER NOT NULL,
     role_name VARCHAR(100) NOT NULL,
@@ -237,7 +268,7 @@ CREATE TABLE approval_matrix (
     is_active BOOLEAN DEFAULT TRUE
 );
 
-CREATE TABLE invoice_approvals (
+CREATE TABLE IF NOT EXISTS invoice_approvals (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     tier_level INTEGER NOT NULL,
@@ -250,10 +281,19 @@ CREATE TABLE invoice_approvals (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS approval_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    approval_id UUID NOT NULL REFERENCES invoice_approvals(id) ON DELETE CASCADE,
+    actor_email VARCHAR(255) NOT NULL,
+    action_taken VARCHAR(50) NOT NULL,
+    notes TEXT,
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ----------------------------------------------------------------------------
--- 7. PAYMENT PROCESSING & ADVICE
+-- 9. PAYMENT PROCESSING & TRANSACTIONS
 -- ----------------------------------------------------------------------------
-CREATE TABLE payment_requests (
+CREATE TABLE IF NOT EXISTS payment_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     payment_reference VARCHAR(64) UNIQUE NOT NULL,
     invoice_id UUID NOT NULL REFERENCES invoices(id),
@@ -270,10 +310,33 @@ CREATE TABLE payment_requests (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS payment_transactions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    payment_request_id UUID NOT NULL REFERENCES payment_requests(id) ON DELETE CASCADE,
+    gateway_name VARCHAR(100) DEFAULT 'SANDBOX_NEFT_ADAPTER',
+    gateway_reference VARCHAR(150),
+    response_code VARCHAR(50),
+    response_payload JSONB,
+    processed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ----------------------------------------------------------------------------
--- 8. AUDIT LOGGING & COMPLIANCE
+-- 10. NOTIFICATIONS & IMMUTABLE AUDIT LOGS
 -- ----------------------------------------------------------------------------
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    recipient_email VARCHAR(255) NOT NULL,
+    recipient_role VARCHAR(64) DEFAULT 'FINANCE_EMPLOYEE',
+    notification_type VARCHAR(64) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    entity_id VARCHAR(100),
+    is_read BOOLEAN DEFAULT FALSE,
+    email_dispatched BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     entity_type VARCHAR(64) NOT NULL,
     entity_id UUID NOT NULL,
@@ -287,37 +350,18 @@ CREATE TABLE audit_logs (
 );
 
 -- ----------------------------------------------------------------------------
--- 9. PERFORMANCE INDEXES
+-- 11. INDEXES & CONSTRAINTS
 -- ----------------------------------------------------------------------------
-CREATE INDEX idx_invoices_vendor_id ON invoices(vendor_id);
-CREATE INDEX idx_invoices_status ON invoices(status);
-CREATE INDEX idx_invoices_invoice_date ON invoices(invoice_date);
-CREATE INDEX idx_invoices_matching_status ON invoices(matching_status);
-CREATE INDEX idx_invoices_unique_vendor_inv ON invoices(vendor_id, invoice_number);
+CREATE INDEX IF NOT EXISTS idx_invoices_vendor_id ON invoices(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+CREATE INDEX IF NOT EXISTS idx_invoices_date ON invoices(invoice_date);
+CREATE INDEX IF NOT EXISTS idx_invoices_matching_status ON invoices(matching_status);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_vendor_invoice ON invoices(vendor_id, invoice_number);
 
-CREATE INDEX idx_invoice_lines_invoice_id ON invoice_line_items(invoice_id);
-CREATE INDEX idx_po_lines_po_id ON po_line_items(po_id);
-CREATE INDEX idx_grn_lines_grn_id ON grn_line_items(grn_id);
+CREATE INDEX IF NOT EXISTS idx_inv_lines_inv_id ON invoice_line_items(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_po_lines_po_id ON po_line_items(po_id);
+CREATE INDEX IF NOT EXISTS idx_grn_lines_grn_id ON grn_line_items(grn_id);
 
-CREATE INDEX idx_approvals_invoice_id ON invoice_approvals(invoice_id);
-CREATE INDEX idx_approvals_status ON invoice_approvals(status);
-
-CREATE INDEX idx_payments_invoice_id ON payment_requests(invoice_id);
-CREATE INDEX idx_payments_status ON payment_requests(status);
-
-CREATE INDEX idx_audit_entity ON audit_logs(entity_type, entity_id);
-CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
-
--- ----------------------------------------------------------------------------
--- 10. TRIGGER FOR AUTO-UPDATING TIMESTAMPS
--- ----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION update_timestamp_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
-CREATE TRIGGER trg_vendors_updated_at BEFORE UPDATE ON vendors FOR EACH ROW EXECUTE PROCEDURE update_timestamp_column();
-CREATE TRIGGER trg_invoices_updated_at BEFORE UPDATE ON invoices FOR EACH ROW EXECUTE PROCEDURE update_timestamp_column();
+CREATE INDEX IF NOT EXISTS idx_approvals_inv ON invoice_approvals(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_payments_inv ON payment_requests(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_logs(created_at DESC);

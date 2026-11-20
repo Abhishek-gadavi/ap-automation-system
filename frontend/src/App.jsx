@@ -2,12 +2,19 @@ import React, { useState } from 'react';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
+import InvoicesList from './components/InvoicesList';
 import InvoiceCapture from './components/InvoiceCapture';
+import VendorManagement from './components/VendorManagement';
+import PurchaseOrders from './components/PurchaseOrders';
+import GoodsReceipts from './components/GoodsReceipts';
 import POMatching from './components/POMatching';
 import ApprovalWorkflow from './components/ApprovalWorkflow';
-import VendorManagement from './components/VendorManagement';
 import PaymentProcessing from './components/PaymentProcessing';
 import Reports from './components/Reports';
+import Notifications from './components/Notifications';
+import AuditLogs from './components/AuditLogs';
+import UserManagement from './components/UserManagement';
+import Settings from './components/Settings';
 
 import { initialInvoices, initialPayments, initialVendors } from './mockData';
 
@@ -30,7 +37,7 @@ export default function App() {
       {/* Main Two-Column Layout */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* Navigation Sidebar */}
+        {/* Navigation Sidebar with all 14 AP modules */}
         <Sidebar
           activeTab={activeTab}
           setActiveTab={setActiveTab}
@@ -49,12 +56,40 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'invoices' && (
+            <InvoicesList
+              invoices={invoices}
+              setActiveTab={setActiveTab}
+              setSelectedInvoice={setSelectedInvoice}
+            />
+          )}
+
           {activeTab === 'capture' && (
             <InvoiceCapture
               invoices={invoices}
               setInvoices={setInvoices}
               setActiveTab={setActiveTab}
               setSelectedInvoice={setSelectedInvoice}
+            />
+          )}
+
+          {activeTab === 'vendors' && (
+            <VendorManagement
+              vendors={vendors}
+              setVendors={setVendors}
+            />
+          )}
+
+          {activeTab === 'purchase_orders' && (
+            <PurchaseOrders
+              invoices={invoices}
+              setActiveTab={setActiveTab}
+            />
+          )}
+
+          {activeTab === 'goods_receipts' && (
+            <GoodsReceipts
+              setActiveTab={setActiveTab}
             />
           )}
 
@@ -78,13 +113,6 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'vendors' && (
-            <VendorManagement
-              vendors={vendors}
-              setVendors={setVendors}
-            />
-          )}
-
           {activeTab === 'payments' && (
             <PaymentProcessing
               invoices={invoices}
@@ -100,6 +128,25 @@ export default function App() {
               payments={payments}
               vendors={vendors}
             />
+          )}
+
+          {activeTab === 'notifications' && (
+            <Notifications />
+          )}
+
+          {activeTab === 'audit_logs' && (
+            <AuditLogs />
+          )}
+
+          {activeTab === 'user_management' && (
+            <UserManagement
+              currentRole={currentRole}
+              setCurrentRole={setCurrentRole}
+            />
+          )}
+
+          {activeTab === 'settings' && (
+            <Settings />
           )}
         </main>
 
