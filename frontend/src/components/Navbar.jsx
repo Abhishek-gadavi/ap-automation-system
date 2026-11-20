@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Navbar({ currentRole, setCurrentRole }) {
+export default function Navbar({ currentRole, setCurrentRole, onResetData }) {
   return (
     <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -19,13 +19,20 @@ export default function Navbar({ currentRole, setCurrentRole }) {
         </div>
 
         {/* Global Controls & Role Selector */}
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
+          
+          {/* Storage Persistence Indicator */}
+          <div className="hidden lg:flex items-center space-x-1.5 text-[11px] bg-slate-800/80 px-2.5 py-1.5 rounded-lg border border-slate-700 text-slate-300">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Auto-Save Active (Persistent)</span>
+          </div>
+
           <div className="flex items-center bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
-            <span className="text-xs text-slate-400 mr-2 font-medium">Acting Role:</span>
+            <span className="text-xs text-slate-400 mr-2 font-medium">Role:</span>
             <select
               value={currentRole}
               onChange={(e) => setCurrentRole(e.target.value)}
-              className="bg-transparent text-sm font-semibold text-blue-400 focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-blue-400 focus:outline-none cursor-pointer"
             >
               <option value="AP Clerk" className="bg-slate-900 text-white">AP Clerk (Reviewer)</option>
               <option value="Finance Team Lead" className="bg-slate-900 text-white">Finance Team Lead</option>
@@ -34,10 +41,15 @@ export default function Navbar({ currentRole, setCurrentRole }) {
             </select>
           </div>
 
-          <div className="hidden sm:flex items-center space-x-2 text-xs text-slate-400">
-            <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></div>
-            <span>OCR AI Engine: Active</span>
-          </div>
+          {onResetData && (
+            <button
+              onClick={onResetData}
+              title="Reset data back to initial seed if needed"
+              className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg border border-slate-700 transition"
+            >
+              ↺ Reset
+            </button>
+          )}
 
           <div className="flex items-center space-x-2 pl-2 border-l border-slate-700">
             <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center font-bold text-xs text-blue-300">

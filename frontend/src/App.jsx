@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -19,20 +19,88 @@ import Settings from './components/Settings';
 import { initialInvoices, initialPayments, initialVendors } from './mockData';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [currentRole, setCurrentRole] = useState('Finance Controller');
-  const [invoices, setInvoices] = useState(initialInvoices);
-  const [payments, setPayments] = useState(initialPayments);
-  const [vendors, setVendors] = useState(initialVendors);
-  const [selectedInvoice, setSelectedInvoice] = useState(initialInvoices[0]);
+  // Persistent State: Survives browser close, refresh, and server restarts
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem('templegate_active_tab') || 'dashboard';
+  });
 
-  const pendingApprovalsCount = invoices.filter(i => i.status === 'PENDING_APPROVAL').length;
+  const [currentRole, setCurrentRole] = useState(() => {
+    return localStorage.getItem('templegate_role') || 'Finance Controller';
+  });
+
+  const [invoices, setInvoices] = useState(() => {
+    try {
+      const saved = localStorage.getItem('templegate_invoices');
+      return saved ? JSON.parse(saved) : initialInvoices;
+    } catch (e) {
+      return initialInvoices;
+    }
+  });
+
+  const [payments, setPayments] = useState(() => {
+    try {
+      const saved = localStorage.getItem('templegate_payments');
+      return saved ? JSON.parse(saved) : initialPayments;
+    } catch (e) {
+      return initialPayments;
+    }
+  });
+
+  const [vendors, setVendors] = useState(() => {
+    try {
+      const saved = localStorage.getItem('templegate_vendors');
+      return saved ? JSON.parse(saved) : initialVendors;
+    } catch (e) {
+      return initialVendors;
+    }
+  });
+
+  const [selectedInvoice, setSelectedInvoice] = useState(() => {
+    return invoices[0] || initialInvoices[0];
+  });
+
+  // Automatically save any new invoice uploads, approvals, or payments
+  useEffect(() => {
+    localStorage.setItem('templegate_invoices', JSON.stringify(invoices));
+  }, [invoices]);
+
+  useEffect(() => {
+    localStorage.setItem('templegate_payments', JSON.stringify(payments));
+  }, [payments]);
+
+  useEffect(() => {
+    localStorage.setItem('templegate_vendors', JSON.stringify(vendors));
+  }, [vendors]);
+
+  useEffect(() => {
+    localStorage.setItem('templegate_role', currentRole);
+  }, [currentRole]);
+
+  useEffect(() => {
+    localStorage.setItem('templegate_active_tab', activeTab);
+  }, [activeTab]);
+
+  // Convenience function to reset data to initial demo seed if desired
+  const handleResetData = () => {
+    localStorage.removeItem('templegate_invoices');
+    localStorage.removeItem('templegate_payments');
+    localStorage.removeItem('templegate_vendors');
+    setInvoices(initialInvoices);
+    setPayments(initialPayments);
+    setVendors(initialVendors);
+    setSelectedInvoice(initialInvoices[0]);
+    alert('Database successfully reset to initial demo state!');
+  };
+
+  const pendingApprovalsCount = invoices.filter(
+    i => i.status !== 'APPROVED' && i.status !== 'PAID' && i.status !== 'REJECTED' && i.status !== 'CANCELLED'
+  ).length;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-800">
       
       {/* Top Application Bar */}
-      <Navbar currentRole={currentRole} setCurrentRole={setCurrentRole} />
+      <Navbar currentRole={currentRole} setCurrentRole={setCurrentRole} onResetData={handleResetData} />
 
       {/* Main Two-Column Layout */}
       <div className="flex-1 flex overflow-hidden">
@@ -146,7 +214,7 @@ export default function App() {
           )}
 
           {activeTab === 'settings' && (
-            <Settings />
+            <Settings onResetData={handleResetData} />
           )}
         </main>
 
