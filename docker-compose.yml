@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # --------------------------------------------------------------------------
+  # 1. PostgreSQL Database Service (Mandatory Technology Stack)
+  # --------------------------------------------------------------------------
+  db:
+    image: postgres:15-alpine
+    container_name: ap_postgres_db
+    restart: always
+    environment:
+      POSTGRES_DB: ap_automation_db
+      POSTGRES_USER: ap_user
+      POSTGRES_PASSWORD: ap_secure_password_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/1_schema.sql
+      - ./database/seed_data.sql:/docker-entrypoint-initdb.d/2_seed.sql
+
+  # --------------------------------------------------------------------------
+  # 2. Django Backend Service (Django REST Framework)
+  # --------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ap_django_backend
+    restart: always
+    command: >
+      sh -c "python manage.py migrate &&
+             python seed_data.py &&
+             python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - USE_POSTGRES=True
+      - DB_NAME=ap_automation_db
+      - DB_USER=ap_user
+      - DB_PASSWORD=ap_secure_password_2026
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DEBUG=True
+    depends_on:
+      - db
+
+  # --------------------------------------------------------------------------
+  # 3. ReactJS Frontend Service
+  # --------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ap_react_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
